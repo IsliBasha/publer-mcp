@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022"
+  },
+  "references": [
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/publer-client" }
+  ],
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "src/__tests__"]
+}

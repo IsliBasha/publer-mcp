@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts       SocialAccount[]
+  scheduledPosts ScheduledPost[]
+
+  @@map("workspaces")
+}
+
+model SocialAccount {
+  id          String   @id @default(cuid())
+  platform    String
+  name        String
+  username    String
+  avatarUrl   String?
+  workspaceId String
+  isConnected Boolean  @default(true)
+  connectedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace           Workspace             @relation(fields: [workspaceId], references: [id])
+  analyticsSnapshots  AnalyticsSnapshot[]
+
+  @@map("social_accounts")
+}
+
+model ScheduledPost {
+  id          String   @id @default(cuid())
+  content     String
+  platforms   String[]
+  scheduledAt DateTime
+  status      String   @default("scheduled")
+  accountIds  String[]
+  mediaUrls   String[]
+  publerPostId String?
+  workspaceId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  queueJobs   QueueJob[]
+  auditLogs   AuditLog[]
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([workspaceId])
+  @@map("scheduled_posts")
+}
+
+model AnalyticsSnapshot {
+  id          String   @id @default(cuid())
+  accountId   String
+  platform    String
+  followers   Int
+  following   Int?
+  snapshotAt  DateTime @default(now())
+  rawData     Json
+
+  account     SocialAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, snapshotAt])
+  @@map("analytics_snapshots")
+}
+
+model EngagementMetric {
+  id           String   @id @default(cuid())
+  postId       String
+  platform     String
+  likes        Int      @default(0)
+  comments     Int      @default(0)
+  shares       Int      @default(0)
+  reach        Int      @default(0)
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  saves        Int      @default(0)
+  engagementRate Float  @default(0)
+  capturedAt   DateTime @default(now())
+
+  @@index([postId])
+  @@map("engagement_metrics")
+}
+
+model AIContentGeneration {
+  id        String   @id @default(cuid())
+  type      String
+  input     Json
+  output    Json
+  platform  String?
+  tone      String?
+  createdAt DateTime @default(now())
+
+  @@map("ai_content_generations")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  scheduledPost ScheduledPost? @relation(fields: [entityId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model QueueJob {
+  id            String   @id @default(cuid())
+  bullJobId     String   @unique
+  name          String
+  status        String   @default("waiting")
+  data          Json
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(3)
+  scheduledFor  DateTime?
+  completedAt   DateTime?
+  failedAt      DateTime?
+  failReason    String?
+  createdAt     DateTime @default(now())
+
+  scheduledPost ScheduledPost? @relation(fields: [entityId], references: [id])
+  entityId      String?
+
+  @@index([status])
+  @@index([scheduledFor])
+  @@map("queue_jobs")
+}
