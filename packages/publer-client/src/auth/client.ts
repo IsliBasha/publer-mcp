@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import axiosRetry from 'axios-retry'
 
-const PUBLER_API_BASE = 'https://api.publer.io/v1'
+const PUBLER_API_BASE = 'https://app.publer.com/api/v1'
 
 export class PublerApiError extends Error {
   constructor(
@@ -14,7 +14,7 @@ export class PublerApiError extends Error {
   }
 }
 
-export function createPublerClient(apiKey: string): AxiosInstance {
+export function createPublerClient(apiKey: string, workspaceId?: string): AxiosInstance {
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('PUBLER_API_KEY is required')
   }
@@ -23,10 +23,11 @@ export function createPublerClient(apiKey: string): AxiosInstance {
     baseURL: PUBLER_API_BASE,
     timeout: 30_000,
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer-API ${apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'User-Agent': 'publer-mcp/1.0.0',
+      ...(workspaceId && { 'Publer-Workspace-Id': workspaceId }),
     },
   })
 

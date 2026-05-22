@@ -12,11 +12,11 @@ import { AnalyticsService } from './analytics/analytics.service.js'
 import { AccountsService } from './accounts/accounts.service.js'
 import { createMockServices } from './mock/mock-services.js'
 
-export function createPublerServices(apiKey: string) {
+export function createPublerServices(apiKey: string, workspaceId?: string) {
   if (process.env.PUBLER_MOCK === 'true') {
     return createMockServices()
   }
-  const client = createPublerClient(apiKey)
+  const client = createPublerClient(apiKey, workspaceId)
   return {
     posts: new PostsService(client),
     analytics: new AnalyticsService(client),

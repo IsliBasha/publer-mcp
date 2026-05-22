@@ -3,6 +3,7 @@ import { z } from 'zod'
 const EnvSchema = z
   .object({
     PUBLER_API_KEY: z.string().min(1).optional(),
+    PUBLER_WORKSPACE_ID: z.string().optional(),
     PUBLER_MOCK: z.enum(['true', 'false']).default('false'),
     ANTHROPIC_API_KEY: z.string().optional(),
     MCP_SERVER_NAME: z.string().default('publer-mcp'),
