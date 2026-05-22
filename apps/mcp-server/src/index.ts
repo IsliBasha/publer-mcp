@@ -21,7 +21,7 @@ async function main() {
   registerPostTools(server, services.posts)
   registerAnalyticsTools(server, services.analytics)
   registerAccountTools(server, services.accounts)
-  registerAiTools(server, env.ANTHROPIC_API_KEY)
+  registerAiTools(server, services.posts, env.ANTHROPIC_API_KEY)
 
   // MCP Resources — expose structured data Claude can read
   server.resource(

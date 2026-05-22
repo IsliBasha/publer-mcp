@@ -1,7 +1,7 @@
 import { AxiosInstance } from 'axios'
 import type { FollowerMetrics, PostAnalytics, BestPostingTime } from '@publer-mcp/shared-types'
 import type { Platform } from '@publer-mcp/shared-types'
-import type { PublerApiAccount } from '../types/publer-api.js'
+import type { PublerApiAccount, PublerApiPost } from '../types/publer-api.js'
 
 // Publer API v1 has no analytics endpoints — these are industry best-practice fallbacks.
 const BEST_TIMES: Record<string, BestPostingTime['recommendations']> = {
@@ -63,13 +63,15 @@ export class AnalyticsService {
       }))
   }
 
-  // Publer API has no per-post analytics endpoint; returns placeholder data.
+  // Fetches post content from /posts/:id; engagement metrics unavailable in Publer API v1.
   async getPostAnalytics(postId: string): Promise<PostAnalytics> {
+    const response = await this.client.get<PublerApiPost>(`/posts/${postId}`)
+    const post = response.data
     return {
       postId,
       platform: 'facebook' as Platform,
-      content: '',
-      publishedAt: new Date().toISOString(),
+      content: post.text,
+      publishedAt: post.scheduled_at ?? post.updated_at,
       metrics: {
         likes: 0, comments: 0, shares: 0, reach: 0, impressions: 0,
         clicks: 0, saves: 0, engagementRate: 0, engagementScore: 0,

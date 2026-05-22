@@ -1,146 +1,166 @@
-# Publer MCP — AI-Native Social Media Platform
+# Publer MCP Server
 
-> A production-grade Model Context Protocol server connecting Claude Desktop to Publer's social media management platform. Schedule posts, analyze engagement, and run AI-powered campaigns through natural language.
+> A Model Context Protocol server that connects Claude Desktop to your [Publer](https://publer.com) social media workspace. Manage scheduled content, generate AI captions, and explore your social accounts through natural language.
 
-## Architecture
+## What it does
 
-```
-Claude Desktop (MCP Client)
-       │  stdio (JSON-RPC 2.0)
-       ▼
-┌──────────────────────────┐
-│   MCP Server             │
-│   13 tools · 2 resources │
-│   3 prompt templates     │
-└──────────┬───────────────┘
-           ▼
-┌──────────────────────────┐
-│   Application Services   │
-│   Posts · Analytics      │
-│   Accounts · AI          │
-└──────────┬───────────────┘
-           ▼
-┌──────────────────────────────────────────┐
-│           Infrastructure                  │
-│  Publer REST API │ PostgreSQL │ BullMQ    │
-│  Redis           │ Socket.IO  │ Pino logs │
-└──────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────┐
-│   Next.js Dashboard      │
-│   Real-time · Analytics  │
-│   Calendar · AI Chat     │
-└──────────────────────────┘
-```
+Expose 13 MCP tools so Claude can:
 
-## MCP Tools (13 tools)
+- **Read** your scheduled posts and social accounts via the Publer REST API
+- **Generate** platform-optimized captions and hashtags with Claude Haiku (or template fallback)
+- **View** your content calendar with gap detection
+- **Update** existing scheduled posts (reschedule, change text)
+- Return honest, graceful errors for operations the Publer API v1 does not support (create/delete/analytics)
 
-| Tool | Description |
+## MCP Tools
+
+| Tool | What it does |
 |------|-------------|
-| `create_post` | Publish immediately to one or more platforms |
-| `schedule_post` | Schedule for future datetime with timezone support |
-| `list_scheduled_posts` | List upcoming content with filters |
-| `update_scheduled_post` | Edit content, reschedule, swap platforms |
-| `delete_post` | Remove scheduled or published content |
-| `get_followers` | Follower counts and growth trends |
-| `get_post_analytics` | Engagement metrics for specific posts |
-| `get_best_posting_time` | AI-powered optimal posting time analysis |
-| `fetch_engagement_summary` | Executive analytics summary with AI insights |
 | `list_social_accounts` | Connected accounts across all platforms |
-| `generate_caption_ai` | AI caption generation with tone control |
-| `generate_hashtags` | Platform-optimized hashtag generation |
-| `content_calendar_view` | Calendar-friendly scheduled content view |
+| `list_scheduled_posts` | Upcoming scheduled content with date/platform filters |
+| `update_scheduled_post` | Edit text or reschedule an existing post |
+| `create_post` | Explains that Publer API v1 is read-only for creates |
+| `schedule_post` | Explains that Publer API v1 is read-only for creates |
+| `delete_post` | Explains that Publer API v1 is read-only for deletes |
+| `get_followers` | Account list with follower placeholder metrics |
+| `get_post_analytics` | Real post content from Publer + zero-value engagement metrics |
+| `get_best_posting_time` | Industry best-practice posting windows per platform |
+| `fetch_engagement_summary` | Scheduled post count summary across your workspace |
+| `generate_caption_ai` | AI caption via Claude Haiku; template fallback without key |
+| `generate_hashtags` | Platform-optimized hashtags via Claude Haiku or template |
+| `content_calendar_view` | Posts grouped by day with gap detection |
 
-## Example AI Conversations
+**MCP Resources:** `analytics://overview`, `calendar://scheduled-posts`  
+**MCP Prompts:** `generate-marketing-campaign`, `rewrite-for-linkedin`, `build-weekly-content-calendar`
 
-```
-You: "How many followers do I have across all platforms?"
-Claude: [calls get_followers] LinkedIn: 12,400 (+3.2%), Instagram: 28,100 (+8.7%)
+## API Limitations
 
-You: "Schedule a motivational LinkedIn post for tomorrow at 9 AM"
-Claude: [calls generate_caption_ai → schedule_post] Post scheduled ✓
+Publer REST API v1 is read-oriented. The following are not available via API and must be done in the Publer web app:
 
-You: "Generate hashtags for a SaaS product launch"
-Claude: [calls generate_hashtags] #SaaS #ProductLaunch #B2BSoftware ...
+- Creating new posts
+- Deleting posts
+- Analytics / engagement metrics (all `/analytics/*` endpoints return 404)
 
-You: "Show my best performing post this month"
-Claude: [calls get_post_analytics] Dec 15 post: 24,800 reach, 6.8% engagement rate
-```
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| MCP Protocol | `@modelcontextprotocol/sdk` (official Anthropic) |
-| Backend | TypeScript, Node.js, Express |
-| Validation | Zod (runtime + type safety) |
-| Database | PostgreSQL 16 + Prisma ORM |
-| Queue | BullMQ + Redis 7 |
-| Real-time | Socket.IO WebSockets |
-| Frontend | Next.js 14, Tailwind CSS, Recharts |
-| Logging | Pino (structured, secret-redacting) |
-| Monorepo | pnpm workspaces + Turborepo |
-| Container | Docker + Docker Compose |
+The MCP tools for these operations return clear explanatory messages rather than crashing.
 
 ## Quick Start
 
+### 1. Clone and install
+
 ```bash
-# 1. Install
-git clone https://github.com/your-org/publer-mcp && cd publer-mcp
+git clone https://github.com/IsliBasha/publer-mcp
+cd publer-mcp
 pnpm install
-
-# 2. Configure
-cp .env.example .env
-# Add PUBLER_API_KEY to .env
-
-# 3. Start infrastructure
-pnpm docker:up && pnpm db:migrate && pnpm db:seed
-
-# 4. Run
-pnpm build && pnpm dev
 ```
 
-Services: Dashboard → http://localhost:3000 | API → http://localhost:3001
+### 2. Configure environment
 
-## Claude Desktop Setup
+```bash
+cp .env.example .env
+```
 
-See [docs/claude-desktop-config.md](docs/claude-desktop-config.md) for platform-specific config (macOS/Windows/Linux).
+Edit `.env`:
+
+```
+PUBLER_API_KEY=your_publer_api_key
+PUBLER_WORKSPACE_ID=your_workspace_id
+ANTHROPIC_API_KEY=your_anthropic_key   # optional — enables AI caption/hashtag generation
+```
+
+**Get your Publer API key:** Publer Settings → API & Integrations → Generate API Key  
+**Get your workspace ID:** visible in the Publer URL after `/workspace/`
+
+### 3. Build
+
+```bash
+pnpm build
+```
+
+### 4. Connect to Claude Desktop
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "publer": {
+      "command": "node",
+      "args": ["/absolute/path/to/publer-mcp/apps/mcp-server/dist/index.js"],
+      "env": {
+        "PUBLER_API_KEY": "your_publer_api_key",
+        "PUBLER_WORKSPACE_ID": "your_workspace_id",
+        "ANTHROPIC_API_KEY": "your_anthropic_key"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. You should see the Publer tools appear.
+
+### Mock mode (no API key needed)
+
+```bash
+PUBLER_MOCK=true node apps/mcp-server/dist/index.js
+```
+
+Returns realistic fixture data for all 13 tools — useful for testing the MCP integration without a Publer account.
 
 ## Project Structure
 
 ```
 publer-mcp/
 ├── apps/
-│   ├── mcp-server/        # MCP stdio server — 13 tools
-│   ├── api-server/        # Express + Socket.IO + BullMQ
-│   │   └── prisma/        # Database schema
-│   └── dashboard/         # Next.js real-time UI
+│   └── mcp-server/          # MCP stdio server — 13 tools, 2 resources, 3 prompts
+│       └── src/
+│           ├── tools/        # post-tools, analytics-tools, account-tools, ai-tools
+│           ├── config/       # env validation (Zod)
+│           └── utils/        # response helpers
 ├── packages/
-│   ├── publer-client/     # Publer API abstraction layer
-│   ├── shared-types/      # Zod schemas + TypeScript types
-│   ├── ai-services/       # AI content generation
-│   └── queue-system/      # BullMQ job definitions
-├── docs/
-└── docker-compose.yml
+│   ├── publer-client/        # Publer REST API abstraction (posts, accounts, analytics)
+│   └── shared-types/         # Zod schemas + TypeScript types shared across packages
+└── .env.example
 ```
 
-## Reliability
+## Example conversations
 
-- Retry handling with exponential backoff (3 attempts)
-- Queue persistence — posts survive server restarts
-- Graceful degradation — API errors never crash MCP server
-- Secret masking — API keys redacted from all logs
-- Startup env validation — fails fast on misconfiguration
+```
+"List my scheduled posts for this week"
+→ calls list_scheduled_posts, returns content with dates and platforms
 
-## API Abstraction
+"Write a professional LinkedIn caption about our new product launch"
+→ calls generate_caption_ai with tone=professional, returns caption + engagement score
 
-All Publer API calls flow through `packages/publer-client`. To swap providers, only that package changes — MCP tools, dashboard, and queue system are unaffected.
+"What hashtags should I use for Instagram fitness content?"
+→ calls generate_hashtags, returns up to 30 platform-optimized tags
 
-## Testing
+"Show me my content calendar for June"
+→ calls content_calendar_view, returns posts grouped by day + gap days
+
+"What's the best time to post on TikTok?"
+→ calls get_best_posting_time, returns industry best-practice windows with confidence scores
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| MCP Protocol | `@modelcontextprotocol/sdk` 1.12 |
+| AI generation | `@anthropic-ai/sdk` — Claude Haiku (`claude-haiku-4-5-20251001`) |
+| Validation | Zod (env + shared types) |
+| Runtime | Node.js 20+, TypeScript 5, ESM |
+| Monorepo | pnpm workspaces |
+
+## Development
 
 ```bash
-pnpm test
+# Type-check all packages
+pnpm -r typecheck
+
+# Run mcp-server in watch mode (no build step)
+pnpm --filter @publer-mcp/mcp-server dev
+
+# Inspect tools interactively
 npx @modelcontextprotocol/inspector node apps/mcp-server/dist/index.js
 ```
 
