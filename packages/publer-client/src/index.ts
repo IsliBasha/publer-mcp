@@ -10,8 +10,12 @@ import { createPublerClient } from './auth/client.js'
 import { PostsService } from './posts/posts.service.js'
 import { AnalyticsService } from './analytics/analytics.service.js'
 import { AccountsService } from './accounts/accounts.service.js'
+import { createMockServices } from './mock/mock-services.js'
 
 export function createPublerServices(apiKey: string) {
+  if (process.env.PUBLER_MOCK === 'true') {
+    return createMockServices()
+  }
   const client = createPublerClient(apiKey)
   return {
     posts: new PostsService(client),

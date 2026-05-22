@@ -15,7 +15,7 @@ async function main() {
     version: env.MCP_SERVER_VERSION,
   })
 
-  const services = createPublerServices(env.PUBLER_API_KEY)
+  const services = createPublerServices(env.PUBLER_API_KEY ?? '')
 
   // Register all 13 MCP tools
   registerPostTools(server, services.posts)
