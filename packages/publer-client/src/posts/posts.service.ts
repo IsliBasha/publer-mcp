@@ -1,18 +1,17 @@
 import { AxiosInstance } from 'axios'
 import type { CreatePost, SchedulePost, UpdateScheduledPost, ScheduledPost } from '@publer-mcp/shared-types'
-import type { PublerApiPost } from '../types/publer-api.js'
-import { Platform } from '@publer-mcp/shared-types'
+import type { PublerApiPost, PublerApiPostsResponse } from '../types/publer-api.js'
 
 function mapApiPostToScheduledPost(post: PublerApiPost): ScheduledPost {
   return {
     id: post.id,
     content: post.text,
-    platforms: post.accounts.map((a) => a.type as Platform),
-    scheduledAt: post.scheduled_at ?? post.created_at,
-    status: post.status,
-    accountIds: post.accounts.map((a) => a.id),
-    mediaUrls: post.media.map((m) => m.url),
-    createdAt: post.created_at,
+    platforms: [],                    // account_id→platform lookup not done in list response
+    scheduledAt: post.scheduled_at ?? post.updated_at,
+    status: post.state,               // API field is "state", not "status"
+    accountIds: [post.account_id],    // API returns single account_id
+    mediaUrls: [],
+    createdAt: post.updated_at,
     updatedAt: post.updated_at,
     publerPostId: post.id,
   }
@@ -21,29 +20,14 @@ function mapApiPostToScheduledPost(post: PublerApiPost): ScheduledPost {
 export class PostsService {
   constructor(private readonly client: AxiosInstance) {}
 
-  async createPost(data: CreatePost): Promise<ScheduledPost> {
-    const payload = {
-      text: data.content,
-      account_ids: data.accountIds,
-      media_urls: data.mediaUrls,
-      should_schedule: !data.publishNow,
-      scheduled_at: data.scheduledAt,
-    }
-    const response = await this.client.post<{ data: PublerApiPost }>('/posts', payload)
-    return mapApiPostToScheduledPost(response.data.data)
+  async createPost(_data: CreatePost): Promise<ScheduledPost> {
+    // Publer API v1 does not expose a POST /posts endpoint — use the Publer web app to create posts.
+    throw new Error('Publer API v1 does not support creating posts programmatically. Use the Publer web app or schedule posts there, then manage them via this MCP server.')
   }
 
-  async schedulePost(data: SchedulePost): Promise<ScheduledPost> {
-    const payload = {
-      text: data.content,
-      account_ids: data.accountIds,
-      media_urls: data.mediaUrls,
-      scheduled_at: data.scheduledAt,
-      timezone: data.timezone,
-      recurring: data.recurring,
-    }
-    const response = await this.client.post<{ data: PublerApiPost }>('/posts', payload)
-    return mapApiPostToScheduledPost(response.data.data)
+  async schedulePost(_data: SchedulePost): Promise<ScheduledPost> {
+    // Publer API v1 does not expose a POST /posts endpoint — use the Publer web app to create posts.
+    throw new Error('Publer API v1 does not support scheduling posts programmatically. Use the Publer web app to create and schedule posts, then manage them via this MCP server.')
   }
 
   async listScheduledPosts(params: {
@@ -53,13 +37,17 @@ export class PostsService {
     from?: string
     to?: string
   }): Promise<{ posts: ScheduledPost[]; total: number }> {
-    const response = await this.client.get<{ data: PublerApiPost[]; meta: { total: number } }>(
+    // API returns { posts: [], total: N } — not { data: [], meta: {} }
+    // API uses "state" not "status" as the filter parameter
+    // Passing "page" causes the API to return an empty posts array — strip it
+    const { page: _page, limit, platform, from, to } = params
+    const response = await this.client.get<PublerApiPostsResponse>(
       '/posts',
-      { params: { status: 'scheduled', ...params } }
+      { params: { state: 'scheduled', limit, platform, from, to } }
     )
     return {
-      posts: response.data.data.map(mapApiPostToScheduledPost),
-      total: response.data.meta.total,
+      posts: response.data.posts.map(mapApiPostToScheduledPost),
+      total: response.data.total,
     }
   }
 
@@ -69,14 +57,12 @@ export class PostsService {
     if (data.scheduledAt) payload.scheduled_at = data.scheduledAt
     if (data.mediaUrls) payload.media_urls = data.mediaUrls
 
-    const response = await this.client.patch<{ data: PublerApiPost }>(
-      `/posts/${data.id}`,
-      payload
-    )
-    return mapApiPostToScheduledPost(response.data.data)
+    const response = await this.client.patch<PublerApiPost>(`/posts/${data.id}`, payload)
+    return mapApiPostToScheduledPost(response.data)
   }
 
-  async deletePost(postId: string): Promise<void> {
-    await this.client.delete(`/posts/${postId}`)
+  async deletePost(_postId: string): Promise<void> {
+    // Publer API v1 does not expose a DELETE /posts/:id endpoint.
+    throw new Error('Publer API v1 does not support deleting posts programmatically. Delete posts via the Publer web app.')
   }
 }

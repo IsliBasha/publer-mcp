@@ -3,7 +3,7 @@ export { PostsService } from './posts/posts.service.js'
 export { AnalyticsService } from './analytics/analytics.service.js'
 export { AccountsService } from './accounts/accounts.service.js'
 
-export type { PublerApiPost, PublerApiAccount, PublerApiAnalytics } from './types/publer-api.js'
+export type { PublerApiPost, PublerApiAccount } from './types/publer-api.js'
 
 // Convenience factory — creates all services from a single API key
 import { createPublerClient } from './auth/client.js'

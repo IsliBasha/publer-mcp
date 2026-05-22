@@ -1,50 +1,32 @@
 // Raw Publer REST API response types (not exported publicly — internal to this package)
+// Verified against live API responses 2026-05-23.
 
+// GET /posts returns { posts: PublerApiPost[], total: number }
 export interface PublerApiPost {
   id: string
   text: string
-  status: 'draft' | 'scheduled' | 'published' | 'failed'
+  state: 'draft' | 'scheduled' | 'published' | 'failed'  // API uses "state", not "status"
   scheduled_at: string | null
   published_at: string | null
-  accounts: Array<{
-    id: string
-    type: string
-    name: string
-    username: string
-  }>
-  media: Array<{ url: string; type: 'image' | 'video' }>
-  created_at: string
+  account_id: string   // single ID, not an accounts array
   updated_at: string
 }
 
+export interface PublerApiPostsResponse {
+  posts: PublerApiPost[]
+  total: number
+}
+
+// GET /accounts returns PublerApiAccount[] directly (no wrapper object)
 export interface PublerApiAccount {
   id: string
-  type: string
+  provider: string   // platform: "facebook", "twitter", "mastodon", etc.
+  type: string       // subtype: "fb_page", "mastodon", etc.
   name: string
-  username: string
-  avatar_url: string | null
-  workspace_id: string
-  is_connected: boolean
-  connected_at: string
-}
-
-export interface PublerApiFollowers {
-  account_id: string
-  followers_count: number
-  following_count: number
-  data: Array<{ date: string; count: number }>
-}
-
-export interface PublerApiAnalytics {
-  post_id: string
-  likes: number
-  comments: number
-  shares: number
-  reach: number
-  impressions: number
-  clicks: number
-  saves: number
-  engagement_rate: number
+  username?: string
+  picture: string | null
+  locked: boolean    // true = not accessible / disconnected
+  social_id: string
 }
 
 export interface PublerApiError {
