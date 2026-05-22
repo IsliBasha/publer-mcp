@@ -82,6 +82,52 @@ describe('PostsService.listScheduledPosts', () => {
     expect(result.posts[0].platforms).toEqual([])
   })
 
+  it('filters posts by platform client-side after resolving from account cache', async () => {
+    const twitterPost = { ...API_POST, id: 'p-tw', account_id: 'acc-tw' }
+    const facebookPost = { ...API_POST, id: 'p-fb', account_id: 'acc-fb' }
+    const accounts = [
+      { ...API_ACCOUNT, id: 'acc-tw', provider: 'twitter' },
+      { ...API_ACCOUNT, id: 'acc-fb', provider: 'facebook' },
+    ]
+    const get = mockGet([twitterPost, facebookPost], 2, accounts)
+    const service = new PostsService(makeClient({ get }))
+
+    const result = await service.listScheduledPosts({ platform: 'twitter' })
+
+    expect(result.posts).toHaveLength(1)
+    expect(result.posts[0].platforms).toEqual(['twitter'])
+  })
+
+  it('returns all posts when no platform filter is specified', async () => {
+    const twitterPost = { ...API_POST, id: 'p-tw', account_id: 'acc-tw' }
+    const facebookPost = { ...API_POST, id: 'p-fb', account_id: 'acc-fb' }
+    const accounts = [
+      { ...API_ACCOUNT, id: 'acc-tw', provider: 'twitter' },
+      { ...API_ACCOUNT, id: 'acc-fb', provider: 'facebook' },
+    ]
+    const get = mockGet([twitterPost, facebookPost], 2, accounts)
+    const service = new PostsService(makeClient({ get }))
+
+    const result = await service.listScheduledPosts({})
+
+    expect(result.posts).toHaveLength(2)
+  })
+
+  it('updates total to reflect filtered count', async () => {
+    const twitterPost = { ...API_POST, id: 'p-tw', account_id: 'acc-tw' }
+    const facebookPost = { ...API_POST, id: 'p-fb', account_id: 'acc-fb' }
+    const accounts = [
+      { ...API_ACCOUNT, id: 'acc-tw', provider: 'twitter' },
+      { ...API_ACCOUNT, id: 'acc-fb', provider: 'facebook' },
+    ]
+    const get = mockGet([twitterPost, facebookPost], 2, accounts)
+    const service = new PostsService(makeClient({ get }))
+
+    const result = await service.listScheduledPosts({ platform: 'twitter' })
+
+    expect(result.total).toBe(1)
+  })
+
   it('caches account lookup — only one /accounts call across two listScheduledPosts calls', async () => {
     const get = mockGet([], 0)
     const service = new PostsService(makeClient({ get }))

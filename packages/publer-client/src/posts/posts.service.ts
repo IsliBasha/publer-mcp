@@ -56,12 +56,13 @@ export class PostsService {
       }),
       this.getAccountPlatformMap(),
     ])
-    return {
-      posts: postsResponse.data.posts.map((post) =>
-        mapApiPostToScheduledPost(post, platformMap.get(post.account_id))
-      ),
-      total: postsResponse.data.total ?? 0,
-    }
+    const mapped = postsResponse.data.posts.map((post) =>
+      mapApiPostToScheduledPost(post, platformMap.get(post.account_id))
+    )
+    const filtered = platform
+      ? mapped.filter((p) => p.platforms.includes(platform as Platform))
+      : mapped
+    return { posts: filtered, total: filtered.length }
   }
 
   async updateScheduledPost(data: UpdateScheduledPost): Promise<ScheduledPost> {
