@@ -9,8 +9,16 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       thresholds: { lines: 80 },
-      include: ['packages/*/src/**', 'apps/*/src/**'],
-      exclude: ['**/node_modules/**', '**/dist/**', '**/seed.ts'],
+      include: [
+        'packages/publer-client/src/**',
+      ],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/mock/**',
+        '**/index.ts',
+        '**/auth/**',
+      ],
     },
   },
 })

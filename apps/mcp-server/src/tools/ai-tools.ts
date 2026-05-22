@@ -24,7 +24,7 @@ const PLATFORM_HASHTAG_LIMITS: Record<string, number> = {
   youtube: 15,
 }
 
-function scoreCaption(caption: string, platform: string): number {
+export function scoreCaption(caption: string, platform: string): number {
   let score = 50
   if (caption.includes('?')) score += 10
   if (caption.includes('!')) score += 5
@@ -34,7 +34,7 @@ function scoreCaption(caption: string, platform: string): number {
   return Math.min(100, Math.max(0, score))
 }
 
-function extractHashtags(text: string): string[] {
+export function extractHashtags(text: string): string[] {
   return text
     .split('\n')
     .map((l) => l.trim())
@@ -43,7 +43,7 @@ function extractHashtags(text: string): string[] {
     .filter(Boolean)
 }
 
-function generateFallbackHashtags(
+export function generateFallbackHashtags(
   topic: string,
   platform: string,
   count: number,

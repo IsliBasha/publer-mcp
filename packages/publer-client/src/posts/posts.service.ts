@@ -1,15 +1,15 @@
 import { AxiosInstance } from 'axios'
-import type { CreatePost, SchedulePost, UpdateScheduledPost, ScheduledPost } from '@publer-mcp/shared-types'
-import type { PublerApiPost, PublerApiPostsResponse } from '../types/publer-api.js'
+import type { CreatePost, SchedulePost, UpdateScheduledPost, ScheduledPost, Platform } from '@publer-mcp/shared-types'
+import type { PublerApiPost, PublerApiPostsResponse, PublerApiAccount } from '../types/publer-api.js'
 
-function mapApiPostToScheduledPost(post: PublerApiPost): ScheduledPost {
+function mapApiPostToScheduledPost(post: PublerApiPost, platform?: Platform): ScheduledPost {
   return {
     id: post.id,
     content: post.text,
-    platforms: [],                    // account_id→platform lookup not done in list response
+    platforms: platform ? [platform] : [],
     scheduledAt: post.scheduled_at ?? post.updated_at,
-    status: post.state,               // API field is "state", not "status"
-    accountIds: [post.account_id],    // API returns single account_id
+    status: post.state,
+    accountIds: [post.account_id],
     mediaUrls: [],
     createdAt: post.updated_at,
     updatedAt: post.updated_at,
@@ -18,7 +18,18 @@ function mapApiPostToScheduledPost(post: PublerApiPost): ScheduledPost {
 }
 
 export class PostsService {
+  private accountPlatformCache: Map<string, Platform> | null = null
+
   constructor(private readonly client: AxiosInstance) {}
+
+  private async getAccountPlatformMap(): Promise<Map<string, Platform>> {
+    if (this.accountPlatformCache) return this.accountPlatformCache
+    const response = await this.client.get<PublerApiAccount[]>('/accounts')
+    this.accountPlatformCache = new Map(
+      response.data.map((a) => [a.id, a.provider as Platform])
+    )
+    return this.accountPlatformCache
+  }
 
   async createPost(_data: CreatePost): Promise<ScheduledPost> {
     // Publer API v1 does not expose a POST /posts endpoint — use the Publer web app to create posts.
@@ -37,17 +48,19 @@ export class PostsService {
     from?: string
     to?: string
   }): Promise<{ posts: ScheduledPost[]; total: number }> {
-    // API returns { posts: [], total: N } — not { data: [], meta: {} }
-    // API uses "state" not "status" as the filter parameter
-    // Passing "page" causes the API to return an empty posts array — strip it
+    // API uses "state" not "status"; passing "page" returns empty posts[] — strip it
     const { page: _page, limit, platform, from, to } = params
-    const response = await this.client.get<PublerApiPostsResponse>(
-      '/posts',
-      { params: { state: 'scheduled', limit, platform, from, to } }
-    )
+    const [postsResponse, platformMap] = await Promise.all([
+      this.client.get<PublerApiPostsResponse>('/posts', {
+        params: { state: 'scheduled', limit, platform, from, to },
+      }),
+      this.getAccountPlatformMap(),
+    ])
     return {
-      posts: response.data.posts.map(mapApiPostToScheduledPost),
-      total: response.data.total,
+      posts: postsResponse.data.posts.map((post) =>
+        mapApiPostToScheduledPost(post, platformMap.get(post.account_id))
+      ),
+      total: postsResponse.data.total ?? 0,
     }
   }
 
