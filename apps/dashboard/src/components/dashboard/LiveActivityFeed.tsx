@@ -32,13 +32,16 @@ function formatRelative(date: Date): string {
   return `${Math.floor(mins / 60)}h ago`
 }
 
-const SEED: Activity[] = [
-  { id: 'a1', type: 'published', message: 'LinkedIn post published successfully', timestamp: new Date(Date.now() - 4 * 60_000) },
-  { id: 'a2', type: 'scheduled', message: 'Instagram post queued for 2:00 PM', timestamp: new Date(Date.now() - 12 * 60_000) },
-  { id: 'a3', type: 'ai_generated', message: 'Claude generated 3 caption variants', timestamp: new Date(Date.now() - 25 * 60_000) },
-  { id: 'a4', type: 'scheduled', message: 'Twitter thread queued for Thursday', timestamp: new Date(Date.now() - 48 * 60_000) },
-  { id: 'a5', type: 'failed', message: 'Facebook post failed: rate limit hit', timestamp: new Date(Date.now() - 90 * 60_000) },
-]
+function buildSeed(): Activity[] {
+  const now = Date.now()
+  return [
+    { id: 'a1', type: 'published', message: 'LinkedIn post published successfully', timestamp: new Date(now - 4 * 60_000) },
+    { id: 'a2', type: 'scheduled', message: 'Instagram post queued for 2:00 PM', timestamp: new Date(now - 12 * 60_000) },
+    { id: 'a3', type: 'ai_generated', message: 'Claude generated 3 caption variants', timestamp: new Date(now - 25 * 60_000) },
+    { id: 'a4', type: 'scheduled', message: 'Twitter thread queued for Thursday', timestamp: new Date(now - 48 * 60_000) },
+    { id: 'a5', type: 'failed', message: 'Facebook post failed: rate limit hit', timestamp: new Date(now - 90 * 60_000) },
+  ]
+}
 
 const SIMULATED: Omit<Activity, 'id' | 'timestamp'>[] = [
   { type: 'published', message: 'LinkedIn post published' },
@@ -48,7 +51,7 @@ const SIMULATED: Omit<Activity, 'id' | 'timestamp'>[] = [
 ]
 
 export function LiveActivityFeed() {
-  const [activities, setActivities] = useState<Activity[]>(SEED)
+  const [activities, setActivities] = useState<Activity[]>(() => buildSeed())
 
   useEffect(() => {
     const t = setInterval(() => {

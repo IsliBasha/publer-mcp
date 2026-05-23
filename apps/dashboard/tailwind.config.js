@@ -54,10 +54,15 @@ module.exports = {
           from: { opacity: '0', transform: 'translateY(6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
       },
       animation: {
         'pulse-dot': 'pulse-dot 1.5s ease-in-out infinite',
         'slide-up': 'slide-up 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-in': 'fade-in 0.15s ease-out',
       },
     },
   },
