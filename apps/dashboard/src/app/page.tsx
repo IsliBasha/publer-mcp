@@ -2,7 +2,9 @@ import { Sidebar } from '@/components/dashboard/Sidebar'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { LiveActivityFeed } from '@/components/dashboard/LiveActivityFeed'
 import { EngagementChart } from '@/components/dashboard/EngagementChart'
+import { getPubServices } from '@/lib/publer.server'
 import { Users, Eye, Heart, CalendarCheck } from 'lucide-react'
+import type { SocialAccount } from '@publer-mcp/shared-types'
 
 function getGreeting(): string {
   const h = new Date().getHours()
@@ -19,7 +21,21 @@ function getDateLabel(): string {
   })
 }
 
-export default function DashboardPage() {
+function countConnected(accounts: SocialAccount[]): number {
+  return accounts.filter((a) => a.isConnected).length
+}
+
+export default async function DashboardPage() {
+  const { accounts, posts } = getPubServices()
+
+  const [accountList, { posts: scheduledPosts }] = await Promise.all([
+    accounts.listAccounts().catch(() => [] as SocialAccount[]),
+    posts.listScheduledPosts({ limit: 100 }).catch(() => ({ posts: [], total: 0 })),
+  ])
+
+  const connectedCount = countConnected(accountList)
+  const scheduledCount = scheduledPosts.length
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <Sidebar />
@@ -34,7 +50,8 @@ export default function DashboardPage() {
               {getGreeting()}, Isli
             </h1>
             <p className="text-[13px] text-ink-secondary mt-0.5">
-              3 accounts connected · 2 posts publishing today
+              {connectedCount} {connectedCount === 1 ? 'account' : 'accounts'} connected
+              {scheduledCount > 0 && ` · ${scheduledCount} posts scheduled`}
             </p>
           </header>
 
@@ -42,7 +59,7 @@ export default function DashboardPage() {
             <MetricCard title="Total Followers" value={48_320} change={3.2} icon={Users} />
             <MetricCard title="Weekly Reach" value={124_800} change={8.7} icon={Eye} />
             <MetricCard title="Engagements" value={9_420} change={12.1} icon={Heart} />
-            <MetricCard title="Scheduled Posts" value={14} icon={CalendarCheck} />
+            <MetricCard title="Scheduled Posts" value={scheduledCount} icon={CalendarCheck} />
           </div>
 
           <div className="grid grid-cols-3 gap-4" style={{ minHeight: 320 }}>

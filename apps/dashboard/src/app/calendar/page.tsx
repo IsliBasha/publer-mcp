@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { ScheduledPost } from '@publer-mcp/shared-types'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -13,20 +14,19 @@ const PLATFORM_CHIP: Record<string, string> = {
   facebook: 'bg-platform-facebook/15 text-platform-facebook',
 }
 
-const MOCK_POSTS = [
-  { day: 1, platform: 'linkedin', label: 'Product launch' },
-  { day: 3, platform: 'instagram', label: 'Brand story' },
-  { day: 5, platform: 'twitter', label: 'AI trends thread' },
-  { day: 10, platform: 'instagram', label: 'Behind the scenes' },
-  { day: 15, platform: 'linkedin', label: 'Case study' },
-  { day: 20, platform: 'instagram', label: 'Engagement post' },
-  { day: 22, platform: 'twitter', label: 'Product update' },
-  { day: 27, platform: 'linkedin', label: 'Publer MCP launch' },
-  { day: 29, platform: 'linkedin', label: 'Team spotlight' },
-]
+function toCalendarItems(posts: ScheduledPost[]) {
+  return posts.map((p) => ({
+    day: new Date(p.scheduledAt).getDate(),
+    platform: p.platforms[0] ?? 'linkedin',
+    label: p.content.slice(0, 40),
+  }))
+}
 
 export default function CalendarPage() {
   const [offset, setOffset] = useState(0)
+  const [posts, setPosts] = useState<ScheduledPost[]>([])
+  const [loading, setLoading] = useState(true)
+
   const now = new Date()
   const viewDate = new Date(now.getFullYear(), now.getMonth() + offset, 1)
 
@@ -41,6 +41,22 @@ export default function CalendarPage() {
   const isCurrentMonth =
     viewDate.getMonth() === now.getMonth() && viewDate.getFullYear() === now.getFullYear()
 
+  useEffect(() => {
+    setLoading(true)
+    const from = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).toISOString()
+    const to = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).toISOString()
+    fetch(`/api/posts?from=${from}&to=${to}`)
+      .then((r) => r.json())
+      .then((data: { posts?: ScheduledPost[] }) => {
+        if (data.posts) setPosts(data.posts)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offset])
+
+  const calendarItems = toCalendarItems(posts)
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <Sidebar />
@@ -53,7 +69,7 @@ export default function CalendarPage() {
                 Content Calendar
               </h1>
               <p className="text-[13px] text-ink-secondary">
-                {MOCK_POSTS.length} posts scheduled this month
+                {loading ? 'Loading…' : `${posts.length} posts scheduled this month`}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -97,7 +113,7 @@ export default function CalendarPage() {
 
             <div className="grid grid-cols-7">
               {cells.map((day, i) => {
-                const posts = day ? MOCK_POSTS.filter((p) => p.day === day) : []
+                const dayPosts = day ? calendarItems.filter((p) => p.day === day) : []
                 const isToday = isCurrentMonth && day === now.getDate()
 
                 return (
@@ -122,7 +138,7 @@ export default function CalendarPage() {
                           {day}
                         </span>
                         <div className="mt-1 space-y-0.5">
-                          {posts.map((post, j) => (
+                          {dayPosts.map((post, j) => (
                             <div
                               key={j}
                               className={cn(
