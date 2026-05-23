@@ -92,10 +92,15 @@ export default function CalendarPage() {
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-              <button className="flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150">
+              <a
+                href="https://app.publer.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150"
+              >
                 <Plus className="h-4 w-4" />
                 Schedule Post
-              </button>
+              </a>
             </div>
           </div>
 
@@ -170,10 +175,15 @@ export default function CalendarPage() {
                 <p className="text-[13px] font-medium text-ink-secondary">Nothing scheduled this month</p>
                 <p className="text-[12px] text-ink-disabled mt-0.5">Plan ahead and schedule your first post.</p>
               </div>
-              <button className="mt-1 flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150">
+              <a
+                href="https://app.publer.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150"
+              >
                 <Plus className="h-4 w-4" />
                 Schedule Post
-              </button>
+              </a>
             </div>
           )}
 
