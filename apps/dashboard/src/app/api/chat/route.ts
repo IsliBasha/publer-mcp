@@ -331,7 +331,8 @@ Guidelines:
 - Always fetch real data with tools before answering questions about posts, accounts, or performance.
 - Be concise and specific — give actionable recommendations.
 - Note: creating, scheduling, and deleting posts is not supported via the Publer v1 API. Direct the user to the Publer web app for those actions.
-- Format numbers cleanly and use natural language for dates.`
+- Format numbers cleanly and use natural language for dates.
+- Do not use emojis in any response.`
 
   const stream = new ReadableStream({
     async start(controller) {
