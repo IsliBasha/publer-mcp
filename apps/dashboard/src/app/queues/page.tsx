@@ -1,15 +1,39 @@
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getPubServices } from '@/lib/publer.server'
+import type { ScheduledPost } from '@publer-mcp/shared-types'
 
-const MOCK_JOBS = [
-  { id: 'job-001', post: 'LinkedIn product launch', platform: 'linkedin', time: '10:00 AM', status: 'completed', attempts: 1 },
-  { id: 'job-002', post: 'Instagram brand story', platform: 'instagram', time: '2:00 PM', status: 'active', attempts: 1 },
-  { id: 'job-003', post: 'Twitter AI thread', platform: 'twitter', time: '4:30 PM', status: 'delayed', attempts: 0 },
-  { id: 'job-004', post: 'Facebook campaign post', platform: 'facebook', time: '9:00 AM', status: 'failed', attempts: 3 },
-  { id: 'job-005', post: 'LinkedIn insight article', platform: 'linkedin', time: 'Tomorrow 8 AM', status: 'waiting', attempts: 0 },
-  { id: 'job-006', post: 'Instagram product feature', platform: 'instagram', time: 'Tomorrow 2 PM', status: 'waiting', attempts: 0 },
-]
+type QueueStatus = 'waiting' | 'active' | 'delayed' | 'completed' | 'failed'
+
+function toQueueStatus(postStatus: ScheduledPost['status']): QueueStatus {
+  if (postStatus === 'published') return 'completed'
+  if (postStatus === 'failed') return 'failed'
+  if (postStatus === 'cancelled') return 'failed'
+  return 'waiting'
+}
+
+function formatScheduledTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const isTomorrow = d.toDateString() === new Date(now.getTime() + 86_400_000).toDateString()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  if (isToday) return time
+  if (isTomorrow) return `Tomorrow ${time}`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`
+}
+
+function mapPostsToJobs(posts: ScheduledPost[]) {
+  return posts.map((p) => ({
+    id: p.id.slice(-8),
+    post: p.content.replace(/\n/g, ' ').slice(0, 60),
+    platform: p.platforms[0] ?? 'facebook',
+    time: formatScheduledTime(p.scheduledAt),
+    status: toQueueStatus(p.status),
+    attempts: p.status === 'published' || p.status === 'failed' ? 1 : 0,
+  }))
+}
 
 const STATUS_CONFIG = {
   completed: { icon: CheckCircle2, label: 'Published', iconClass: 'text-status-success', badge: 'bg-status-success/10 text-status-success' },
@@ -26,7 +50,11 @@ const PLATFORM_CHIP: Record<string, string> = {
   facebook: 'bg-platform-facebook/15 text-platform-facebook',
 }
 
-export default function QueuesPage() {
+export default async function QueuesPage() {
+  const { posts: postsService } = getPubServices()
+  const { posts } = await postsService.listScheduledPosts({ limit: 100 }).catch(() => ({ posts: [], total: 0 }))
+  const jobs = mapPostsToJobs(posts)
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <Sidebar />
@@ -45,7 +73,7 @@ export default function QueuesPage() {
           <div className="grid grid-cols-5 gap-3 mb-6">
             {(['waiting', 'active', 'delayed', 'completed', 'failed'] as const).map((s) => {
               const cfg = STATUS_CONFIG[s]
-              const count = MOCK_JOBS.filter((j) => j.status === s).length
+              const count = jobs.filter((j) => j.status === s).length
               return (
                 <div key={s} className="rounded-xl border border-edge-default bg-surface-raised px-4 py-3.5">
                   <p className="text-[10px] font-medium tracking-[0.06em] uppercase text-ink-disabled">
@@ -74,7 +102,7 @@ export default function QueuesPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_JOBS.map((job) => {
+                {jobs.map((job) => {
                   const cfg = STATUS_CONFIG[job.status as keyof typeof STATUS_CONFIG]
                   const Icon = cfg.icon
                   return (

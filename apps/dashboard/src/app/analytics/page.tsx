@@ -1,39 +1,53 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { EngagementChart } from '@/components/dashboard/EngagementChart'
 import { TrendingUp, Users, MousePointerClick, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const PLATFORMS = ['All', 'LinkedIn', 'Instagram', 'Twitter'] as const
-type Platform = (typeof PLATFORMS)[number]
-
-const METRICS: Record<Platform, { engRate: number; followers: number; clicks: number; shares: number }> = {
-  All: { engRate: 4.8, followers: 1_240, clicks: 3_820, shares: 892 },
-  LinkedIn: { engRate: 6.1, followers: 420, clicks: 1_200, shares: 310 },
-  Instagram: { engRate: 5.2, followers: 680, clicks: 1_940, shares: 445 },
-  Twitter: { engRate: 2.4, followers: 140, clicks: 680, shares: 137 },
-}
-
-const TOP_POSTS = [
-  { platform: 'LinkedIn', content: 'Publer MCP is now live for all accounts.', reach: 4_820, eng: 192, rate: '3.98%' },
-  { platform: 'Instagram', content: 'Behind the scenes: building AI-native tools.', reach: 8_340, eng: 611, rate: '7.3%' },
-  { platform: 'Twitter', content: 'The future of social is conversational.', reach: 2_100, eng: 87, rate: '4.1%' },
-  { platform: 'LinkedIn', content: 'Meet the team behind Publer MCP.', reach: 3_610, eng: 148, rate: '4.1%' },
-]
+import type { SocialAccount, ScheduledPost } from '@publer-mcp/shared-types'
 
 const PLATFORM_CHIP: Record<string, string> = {
-  LinkedIn: 'bg-platform-linkedin/15 text-platform-linkedin',
-  Instagram: 'bg-platform-instagram/15 text-platform-instagram',
-  Twitter: 'bg-platform-twitter/15 text-platform-twitter',
+  linkedin: 'bg-platform-linkedin/15 text-platform-linkedin',
+  instagram: 'bg-platform-instagram/15 text-platform-instagram',
+  twitter: 'bg-platform-twitter/15 text-platform-twitter',
+  facebook: 'bg-platform-facebook/15 text-platform-facebook',
+}
+
+const METRICS_ESTIMATES = {
+  engRate: 4.8,
+  followers: 1_240,
+  clicks: 3_820,
+  shares: 892,
 }
 
 export default function AnalyticsPage() {
-  const [platform, setPlatform] = useState<Platform>('All')
-  const m = METRICS[platform]
+  const [accounts, setAccounts] = useState<SocialAccount[]>([])
+  const [allPosts, setAllPosts] = useState<ScheduledPost[]>([])
+  const [activePlatform, setActivePlatform] = useState<string>('All')
 
-  const posts = platform === 'All' ? TOP_POSTS : TOP_POSTS.filter((p) => p.platform === platform)
+  useEffect(() => {
+    fetch('/api/accounts')
+      .then((r) => r.json())
+      .then((data: SocialAccount[]) => setAccounts(data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/posts?limit=20')
+      .then((r) => r.json())
+      .then((data: { posts?: ScheduledPost[] }) => {
+        if (data.posts) setAllPosts(data.posts)
+      })
+      .catch(() => {})
+  }, [])
+
+  const platforms = ['All', ...Array.from(new Set(accounts.map((a) => a.platform)))]
+
+  const posts =
+    activePlatform === 'All'
+      ? allPosts
+      : allPosts.filter((p) => p.platforms.includes(activePlatform as ScheduledPost['platforms'][number]))
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
@@ -47,13 +61,13 @@ export default function AnalyticsPage() {
               <p className="text-[13px] text-ink-secondary">Platform performance · last 7 days</p>
             </div>
             <div className="flex items-center gap-1 p-1 rounded-lg bg-surface-raised border border-edge-default">
-              {PLATFORMS.map((p) => (
+              {platforms.map((p) => (
                 <button
                   key={p}
-                  onClick={() => setPlatform(p)}
+                  onClick={() => setActivePlatform(p)}
                   className={cn(
-                    'px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors duration-100',
-                    platform === p
+                    'px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors duration-100 capitalize',
+                    activePlatform === p
                       ? 'bg-surface-overlay text-ink-primary'
                       : 'text-ink-secondary hover:text-ink-primary'
                   )}
@@ -65,10 +79,10 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid grid-cols-4 gap-4 mb-6">
-            <MetricCard title="Avg. Engagement Rate" value={m.engRate} change={0.6} icon={TrendingUp} />
-            <MetricCard title="New Followers" value={m.followers} change={18.4} icon={Users} />
-            <MetricCard title="Link Clicks" value={m.clicks} change={-2.1} icon={MousePointerClick} />
-            <MetricCard title="Shares" value={m.shares} change={9.3} icon={Share2} />
+            <MetricCard title="Avg. Engagement Rate" value={METRICS_ESTIMATES.engRate} change={0.6} icon={TrendingUp} />
+            <MetricCard title="Accounts Connected" value={accounts.length} icon={Users} />
+            <MetricCard title="Link Clicks" value={METRICS_ESTIMATES.clicks} change={-2.1} icon={MousePointerClick} />
+            <MetricCard title="Shares" value={METRICS_ESTIMATES.shares} change={9.3} icon={Share2} />
           </div>
 
           <div className="mb-6">
@@ -93,30 +107,35 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {posts.map((post, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-edge-subtle/40 last:border-0 hover:bg-surface-overlay/40 transition-colors"
-                  >
-                    <td className="px-5 py-3.5">
-                      <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium', PLATFORM_CHIP[post.platform] ?? 'bg-surface-overlay text-ink-secondary')}>
-                        {post.platform}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 max-w-xs">
-                      <p className="text-[13px] text-ink-secondary truncate">{post.content}</p>
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-ink-secondary tabular-nums">
-                      {post.reach.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-ink-secondary tabular-nums">
-                      {post.eng}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-status-success tabular-nums">
-                      {post.rate}
+                {posts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-[13px] text-ink-disabled">
+                      No posts found for this period.
                     </td>
                   </tr>
-                ))}
+                ) : posts.map((post) => {
+                  const platform = post.platforms[0] ?? 'facebook'
+                  return (
+                    <tr
+                      key={post.id}
+                      className="border-b border-edge-subtle/40 last:border-0 hover:bg-surface-overlay/40 transition-colors"
+                    >
+                      <td className="px-5 py-3.5">
+                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize', PLATFORM_CHIP[platform] ?? 'bg-surface-overlay text-ink-secondary')}>
+                          {platform}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 max-w-xs">
+                        <p className="text-[13px] text-ink-secondary truncate">
+                          {post.content.replace(/\n/g, ' ')}
+                        </p>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-ink-disabled tabular-nums">—</td>
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-ink-disabled tabular-nums">—</td>
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-ink-disabled tabular-nums">—</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
