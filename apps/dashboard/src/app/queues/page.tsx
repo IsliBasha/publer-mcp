@@ -1,5 +1,5 @@
 import { Sidebar } from '@/components/dashboard/Sidebar'
-import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getPubServices } from '@/lib/publer.server'
 import type { ScheduledPost } from '@publer-mcp/shared-types'
@@ -102,7 +102,19 @@ export default async function QueuesPage() {
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((job) => {
+                {jobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Inbox className="h-7 w-7 text-ink-disabled" />
+                        <div>
+                          <p className="text-[13px] font-medium text-ink-secondary">Queue is clear</p>
+                          <p className="text-[12px] text-ink-disabled mt-0.5">No posts are scheduled or in progress.</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : jobs.map((job) => {
                   const cfg = STATUS_CONFIG[job.status as keyof typeof STATUS_CONFIG]
                   const Icon = cfg.icon
                   return (
@@ -138,7 +150,7 @@ export default async function QueuesPage() {
                     </tr>
                   )
                 })}
-              </tbody>
+                </tbody>
             </table>
           </div>
 

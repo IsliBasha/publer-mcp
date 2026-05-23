@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarX2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ScheduledPost } from '@publer-mcp/shared-types'
 
@@ -99,7 +99,12 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-edge-default overflow-hidden">
+          <div className={cn('rounded-xl border border-edge-default overflow-hidden relative', loading && 'opacity-60 pointer-events-none')}>
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <Loader2 className="h-5 w-5 text-ink-disabled animate-spin" />
+              </div>
+            )}
             <div className="grid grid-cols-7 border-b border-edge-default bg-surface-raised">
               {DAYS.map((d) => (
                 <div
@@ -157,6 +162,20 @@ export default function CalendarPage() {
               })}
             </div>
           </div>
+
+          {!loading && posts.length === 0 && (
+            <div className="mt-4 rounded-xl border border-edge-default bg-surface-raised py-12 flex flex-col items-center gap-3">
+              <CalendarX2 className="h-7 w-7 text-ink-disabled" />
+              <div className="text-center">
+                <p className="text-[13px] font-medium text-ink-secondary">Nothing scheduled this month</p>
+                <p className="text-[12px] text-ink-disabled mt-0.5">Plan ahead and schedule your first post.</p>
+              </div>
+              <button className="mt-1 flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150">
+                <Plus className="h-4 w-4" />
+                Schedule Post
+              </button>
+            </div>
+          )}
 
         </div>
       </main>
