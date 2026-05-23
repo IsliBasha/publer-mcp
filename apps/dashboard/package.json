@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
     "@publer-mcp/publer-client": "workspace:^",
     "@publer-mcp/shared-types": "workspace:*",
     "axios": "^1.7.0",

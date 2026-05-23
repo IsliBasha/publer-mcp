@@ -23,36 +23,6 @@ function formatRelative(date: Date): string {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-function pickTools(text: string): { tool: string; params: Record<string, unknown>; delay: number; result: unknown; duration: number } {
-  const lower = text.toLowerCase()
-  if (lower.includes('hashtag')) {
-    return { tool: 'generate_hashtags', params: { platform: 'linkedin', topic: text.slice(0, 80) }, delay: 900, result: { hashtags: ['#ContentMarketing', '#SocialMedia', '#LinkedIn', '#AI', '#Publer'] }, duration: 743 }
-  }
-  if (lower.includes('caption') || lower.includes('generate') || lower.includes('write') || lower.includes('content')) {
-    return { tool: 'generate_caption_ai', params: { platform: 'linkedin', topic: text.slice(0, 80), tone: 'professional' }, delay: 1400, result: { caption: 'Generated caption ready.', characterCount: 280, estimatedEngagementBoost: '18%' }, duration: 1624 }
-  }
-  if (lower.includes('analytic') || lower.includes('performance') || lower.includes('engagement')) {
-    return { tool: 'get_post_analytics', params: { postId: 'recent' }, delay: 800, result: { likes: 142, comments: 31, shares: 19, impressions: 4820, engagementRate: 3.98 }, duration: 512 }
-  }
-  if (lower.includes('follower') || lower.includes('account')) {
-    return { tool: 'get_followers', params: {}, delay: 700, result: { metrics: SEED_ACCOUNTS.map((a) => ({ ...a, followers: 1420 })), totalAccounts: 3 }, duration: 398 }
-  }
-  if (lower.includes('schedule') || lower.includes('when') || lower.includes('time')) {
-    return { tool: 'get_best_posting_time', params: { platform: 'linkedin' }, delay: 600, result: { platform: 'linkedin', recommendations: [{ dayOfWeek: 'Tuesday', hour: 9, confidence: 0.91, expectedEngagementBoost: 22 }], reasoning: 'LinkedIn peaks Tuesday–Thursday, 8–10 AM.' }, duration: 487 }
-  }
-  return { tool: 'list_scheduled_posts', params: { limit: 5 }, delay: 700, result: { total: 2, posts: [] }, duration: 529 }
-}
-
-function buildResponse(text: string): string {
-  const lower = text.toLowerCase()
-  if (lower.includes('hashtag')) return `Here are hashtags for your content:\n\n#ContentMarketing #SocialMedia #LinkedIn #AI #Publer\n\nThese 5 tags target your professional audience and align with current trending topics in social media management.`
-  if (lower.includes('caption') || lower.includes('generate') || lower.includes('write')) return `Here is a LinkedIn caption ready to publish:\n\n---\nSocial media management just got a serious upgrade.\n\nWith Publer MCP, you can schedule posts, generate captions, and analyze performance — all through a conversation with Claude. No dashboards to juggle. No manual scheduling.\n\nThis is what AI-native tooling actually looks like.\n\n#AITools #SocialMedia #ProductLaunch\n---\n\nAt 280 characters this performs well algorithmically. Want me to schedule it for Tuesday at 9 AM when your LinkedIn engagement peaks?`
-  if (lower.includes('analytic') || lower.includes('performance')) return `Here is a recent post performance snapshot:\n\n142 likes, 31 comments, 19 shares\n4,820 impressions — 3.98% engagement rate\n\nThis is above your account average of 2.4%. Posts mentioning product features are consistently your top performers. Want me to generate more content in that style?`
-  if (lower.includes('follower')) return `Your follower counts look healthy across all 3 platforms. LinkedIn is your strongest channel by engagement rate. Want a detailed breakdown or a comparison against last month?`
-  if (lower.includes('schedule') || lower.includes('when') || lower.includes('time')) return `For LinkedIn, Tuesday at 9:00 AM is your best window — 91% confidence, with a 22% expected engagement boost over off-peak posts. Thursday 5 PM is a strong second choice. Want me to schedule your next post for Tuesday?`
-  return `Done. I checked your Publer queue. You have posts scheduled across this week. Want me to show the full schedule or help you create something new?`
-}
-
 export default function AiAssistantPage() {
   const [messages, setMessages] = useState<Message[]>(SEED_MESSAGES)
   const [toolHistory, setToolHistory] = useState<ToolCall[]>(SEED_TOOL_CALLS)
@@ -60,7 +30,8 @@ export default function AiAssistantPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const feedRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const timersRef = useRef<NodeJS.Timeout[]>([])
+  const sessionHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (feedRef.current) {
@@ -79,9 +50,9 @@ export default function AiAssistantPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  useEffect(() => () => { timersRef.current.forEach(clearTimeout) }, [])
+  useEffect(() => () => { abortRef.current?.abort() }, [])
 
-  const send = useCallback(() => {
+  const send = useCallback(async () => {
     const text = input.trim()
     if (!text || isGenerating) return
 
@@ -96,47 +67,136 @@ export default function AiAssistantPage() {
     if (inputRef.current) inputRef.current.style.height = 'auto'
     setIsGenerating(true)
 
-    const toolDef = pickTools(text)
     const assistantId = `a-${Date.now()}`
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', toolCalls: [], timestamp: new Date() },
+    ])
 
-    const t1 = setTimeout(() => {
-      const runningCall: ToolCall = {
-        id: `tc-${Date.now()}`,
-        tool: toolDef.tool,
-        params: toolDef.params,
-        status: 'running',
-        startedAt: new Date(),
+    sessionHistoryRef.current.push({ role: 'user', content: text })
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    let fullText = ''
+
+    try {
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: sessionHistoryRef.current }),
+        signal: controller.signal,
+      })
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const event = JSON.parse(line) as Record<string, unknown>
+
+            if (event.type === 'text') {
+              const delta = event.delta as string
+              fullText += delta
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: m.content + delta } : m
+                )
+              )
+            } else if (event.type === 'tool_start') {
+              const tc: ToolCall = {
+                id: event.id as string,
+                tool: event.tool as string,
+                params: event.params as Record<string, unknown>,
+                status: 'running',
+                startedAt: new Date(),
+              }
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, toolCalls: [...(m.toolCalls ?? []), tc] }
+                    : m
+                )
+              )
+              setToolHistory((prev) => [...prev, tc])
+            } else if (event.type === 'tool_done') {
+              const id = event.id as string
+              const hasError = !!(event.result as Record<string, unknown>)?.error
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        toolCalls: (m.toolCalls ?? []).map((tc) =>
+                          tc.id === id
+                            ? {
+                                ...tc,
+                                status: hasError ? ('error' as const) : ('done' as const),
+                                result: event.result,
+                                duration: event.duration as number,
+                              }
+                            : tc
+                        ),
+                      }
+                    : m
+                )
+              )
+              setToolHistory((prev) =>
+                prev.map((tc) =>
+                  tc.id === id
+                    ? {
+                        ...tc,
+                        status: hasError ? ('error' as const) : ('done' as const),
+                        result: event.result,
+                        duration: event.duration as number,
+                      }
+                    : tc
+                )
+              )
+            } else if (event.type === 'done') {
+              sessionHistoryRef.current.push({ role: 'assistant', content: fullText })
+              setIsGenerating(false)
+            } else if (event.type === 'error') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: `Error: ${event.message as string}` }
+                    : m
+                )
+              )
+              setIsGenerating(false)
+            }
+          } catch {
+            // skip malformed line
+          }
+        }
       }
-
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: 'assistant', content: '', toolCalls: [runningCall], timestamp: new Date() },
-      ])
-      setToolHistory((prev) => [...prev, runningCall])
-
-      const t2 = setTimeout(() => {
-        const doneCall: ToolCall = { ...runningCall, status: 'done', result: toolDef.result, duration: toolDef.duration }
-
-        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, toolCalls: [doneCall] } : m))
-        setToolHistory((prev) => prev.map((tc) => tc.id === runningCall.id ? doneCall : tc))
-
-        const t3 = setTimeout(() => {
-          setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: buildResponse(text) } : m))
-          setIsGenerating(false)
-        }, 350)
-
-        timersRef.current.push(t3)
-      }, toolDef.delay)
-
-      timersRef.current.push(t2)
-    }, 420)
-
-    timersRef.current.push(t1)
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: `Error: ${message}` } : m
+        )
+      )
+      setIsGenerating(false)
+    }
   }, [input, isGenerating])
 
   const reset = () => {
-    timersRef.current.forEach(clearTimeout)
-    timersRef.current = []
+    abortRef.current?.abort()
+    abortRef.current = null
+    sessionHistoryRef.current = []
     setMessages(SEED_MESSAGES)
     setToolHistory(SEED_TOOL_CALLS)
     setIsGenerating(false)
@@ -148,7 +208,7 @@ export default function AiAssistantPage() {
       <Sidebar />
 
       <main className="flex-1 flex overflow-hidden min-w-0">
-        {/* Conversation zone — 68% */}
+        {/* Conversation zone */}
         <section className="flex-1 flex flex-col overflow-hidden min-w-0">
 
           {/* Account strip */}
@@ -177,8 +237,8 @@ export default function AiAssistantPage() {
                 New chat
               </button>
               <div className="flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-ink-disabled" />
-                <span className="text-[11px] text-ink-secondary">Claude ready</span>
+                <div className="h-1.5 w-1.5 rounded-full bg-status-success" />
+                <span className="text-[11px] text-ink-secondary">Claude connected</span>
               </div>
             </div>
           </header>
@@ -241,7 +301,7 @@ export default function AiAssistantPage() {
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
                 }}
                 disabled={isGenerating}
                 placeholder="Ask Claude anything about your Publer workspace… (Cmd+K)"
@@ -256,7 +316,7 @@ export default function AiAssistantPage() {
                 style={{ minHeight: '46px' }}
               />
               <button
-                onClick={send}
+                onClick={() => void send()}
                 disabled={!input.trim() || isGenerating}
                 className={cn(
                   'flex items-center gap-2 rounded-xl px-4 py-3 text-[13px] font-medium text-white shrink-0',
@@ -270,12 +330,12 @@ export default function AiAssistantPage() {
               </button>
             </div>
             <p className="mt-2 text-[11px] text-ink-disabled">
-              Shift+Enter for new line. Claude has access to 13 Publer MCP tools.
+              Shift+Enter for new line. Claude has access to 10 Publer tools.
             </p>
           </div>
         </section>
 
-        {/* Tool rail — 32% */}
+        {/* Tool rail */}
         <aside className="hidden lg:flex w-[272px] shrink-0 flex-col border-l border-edge-subtle overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-edge-subtle shrink-0">
             <Terminal className="h-3.5 w-3.5 text-ink-secondary shrink-0" />
