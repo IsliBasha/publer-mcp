@@ -1,11 +1,12 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, BarChart3, Bot, Clock, Settings } from 'lucide-react'
+import { LayoutDashboard, Calendar, BarChart3, Bot, Clock, Settings, PenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/compose', label: 'New Post', icon: PenLine },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/ai-assistant', label: 'AI Assistant', icon: Bot },

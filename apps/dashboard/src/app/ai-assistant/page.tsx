@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, RotateCcw, Terminal } from 'lucide-react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { ToolCallCard } from '@/components/ai/ToolCallCard'
-import { SEED_MESSAGES, SEED_TOOL_CALLS, SEED_ACCOUNTS } from '@/lib/seed-data'
+import { useAccounts } from '@/hooks/useAccounts'
 import { cn } from '@/lib/utils'
 import type { Message, ToolCall } from '@/types/chat'
 
@@ -24,8 +24,9 @@ function formatRelative(date: Date): string {
 }
 
 export default function AiAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>(SEED_MESSAGES)
-  const [toolHistory, setToolHistory] = useState<ToolCall[]>(SEED_TOOL_CALLS)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [toolHistory, setToolHistory] = useState<ToolCall[]>([])
+  const accounts = useAccounts()
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const feedRef = useRef<HTMLDivElement>(null)
@@ -197,8 +198,8 @@ export default function AiAssistantPage() {
     abortRef.current?.abort()
     abortRef.current = null
     sessionHistoryRef.current = []
-    setMessages(SEED_MESSAGES)
-    setToolHistory(SEED_TOOL_CALLS)
+    setMessages([])
+    setToolHistory([])
     setIsGenerating(false)
     setInput('')
   }
@@ -215,7 +216,7 @@ export default function AiAssistantPage() {
           <header className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-edge-subtle">
             <span className="text-[10px] font-medium tracking-widest uppercase text-ink-disabled">Connected</span>
             <div className="flex items-center gap-1.5">
-              {SEED_ACCOUNTS.map((acc) => (
+              {accounts.map((acc) => (
                 <span
                   key={acc.id}
                   className={cn(
@@ -223,7 +224,7 @@ export default function AiAssistantPage() {
                     PLATFORM_COLORS[acc.platform] ?? 'bg-surface-overlay text-ink-secondary'
                   )}
                 >
-                  {acc.handle}
+                  {acc.username}
                 </span>
               ))}
             </div>
@@ -283,7 +284,7 @@ export default function AiAssistantPage() {
 
             {isGenerating && (
               <div className="flex items-center gap-2.5 animate-fade-in">
-                <div className="h-2 w-2 rounded-full bg-coral animate-pulse-dot" />
+                <div className="h-2 w-2 rounded-full bg-ink-disabled animate-pulse-dot" />
                 <span className="text-[12px] text-ink-disabled">Claude is responding</span>
               </div>
             )}
@@ -309,7 +310,7 @@ export default function AiAssistantPage() {
                 className={cn(
                   'flex-1 resize-none rounded-xl bg-surface-raised border border-edge-default',
                   'px-4 py-3 text-[14px] text-ink-primary placeholder:text-ink-disabled',
-                  'focus:outline-none focus:border-coral focus:ring-2 focus:ring-coral/20 focus:ring-offset-0',
+                  'focus:outline-none focus:border-edge-default focus:ring-2 focus:ring-edge-default/20 focus:ring-offset-0',
                   'transition-[border-color,box-shadow] duration-150',
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}

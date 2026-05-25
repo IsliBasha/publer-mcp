@@ -63,4 +63,33 @@ describe('ToolCallCard', () => {
     fireEvent.click(screen.getByRole('button'))
     expect(screen.queryByText('Output')).not.toBeInTheDocument()
   })
+
+  // ── New behaviour ────────────────────────────────────────────────────────────
+
+  it('auto-expands when status is running', () => {
+    render(<ToolCallCard toolCall={makeToolCall({ status: 'running', result: undefined, duration: undefined })} />)
+    // Must be expanded without any user interaction
+    expect(screen.getByText('Input')).toBeInTheDocument()
+  })
+
+  it('renders params as key-value pairs in the expanded Input section', () => {
+    render(<ToolCallCard toolCall={makeToolCall({ params: { platform: 'linkedin', content: 'hello' } })} />)
+    fireEvent.click(screen.getByRole('button', { name: /list_social_accounts/i }))
+    expect(screen.getByText('platform')).toBeInTheDocument()
+    expect(screen.getByText('linkedin')).toBeInTheDocument()
+    expect(screen.getByText('content')).toBeInTheDocument()
+    expect(screen.getByText('hello')).toBeInTheDocument()
+  })
+
+  it('shows a copy button when expanded and result is present', () => {
+    render(<ToolCallCard toolCall={makeToolCall({ result: { accounts: [] } })} />)
+    fireEvent.click(screen.getByRole('button', { name: /list_social_accounts/i }))
+    expect(screen.getByTitle('Copy result')).toBeInTheDocument()
+  })
+
+  it('does not show copy button when result is absent', () => {
+    render(<ToolCallCard toolCall={makeToolCall({ result: undefined })} />)
+    fireEvent.click(screen.getByRole('button', { name: /list_social_accounts/i }))
+    expect(screen.queryByTitle('Copy result')).not.toBeInTheDocument()
+  })
 })

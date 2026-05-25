@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { EngagementChart } from '@/components/dashboard/EngagementChart'
-import { TrendingUp, Users, MousePointerClick, Share2 } from 'lucide-react'
+import { TrendingUp, Users, CheckCircle2, CalendarCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialAccount, ScheduledPost } from '@publer-mcp/shared-types'
 
@@ -14,17 +14,20 @@ const PLATFORM_CHIP: Record<string, string> = {
   facebook: 'bg-platform-facebook/15 text-platform-facebook',
 }
 
-const METRICS_ESTIMATES = {
-  engRate: 4.8,
-  followers: 1_240,
-  clicks: 3_820,
-  shares: 892,
+interface AnalyticsData {
+  totalFollowers: number
+  weeklyGrowth: number
+  growthPercent: number
+  platformsActive: number
+  scheduledCount: number
+  publishedThisWeek: number
 }
 
 export default function AnalyticsPage() {
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [allPosts, setAllPosts] = useState<ScheduledPost[]>([])
   const [activePlatform, setActivePlatform] = useState<string>('All')
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
 
   useEffect(() => {
     fetch('/api/accounts')
@@ -38,6 +41,15 @@ export default function AnalyticsPage() {
       .then((r) => r.json())
       .then((data: { posts?: ScheduledPost[] }) => {
         if (data.posts) setAllPosts(data.posts)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/analytics')
+      .then((r) => (r.ok ? r.json() : { success: false }))
+      .then(({ success, data }: { success: boolean; data?: AnalyticsData }) => {
+        if (success && data) setAnalyticsData(data)
       })
       .catch(() => {})
   }, [])
@@ -79,10 +91,10 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid grid-cols-4 gap-4 mb-6">
-            <MetricCard title="Avg. Engagement Rate" value={METRICS_ESTIMATES.engRate} change={0.6} icon={TrendingUp} />
-            <MetricCard title="Accounts Connected" value={accounts.length} icon={Users} />
-            <MetricCard title="Link Clicks" value={METRICS_ESTIMATES.clicks} change={-2.1} icon={MousePointerClick} />
-            <MetricCard title="Shares" value={METRICS_ESTIMATES.shares} change={9.3} icon={Share2} />
+            <MetricCard title="Total Followers" value={analyticsData?.totalFollowers ?? 0} icon={Users} />
+            <MetricCard title="Growth This Week" value={analyticsData?.weeklyGrowth ?? 0} change={analyticsData?.growthPercent} icon={TrendingUp} />
+            <MetricCard title="Published This Week" value={analyticsData?.publishedThisWeek ?? 0} icon={CheckCircle2} />
+            <MetricCard title="Scheduled Posts" value={analyticsData?.scheduledCount ?? 0} icon={CalendarCheck} />
           </div>
 
           <div className="mb-6">

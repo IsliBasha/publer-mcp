@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { createPublerServices } from '@publer-mcp/publer-client'
 import { prisma } from '../db/prisma.js'
-import { schedulePostJob } from '../queue/scheduler.js'
+import { schedulePostJob, cancelPostJob } from '../queue/scheduler.js'
 import { env } from '../config/env.js'
 
 const router: Router = Router()
@@ -66,11 +66,22 @@ router.post('/schedule', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    await services.posts.deletePost(req.params.id)
+    const existing = await prisma.scheduledPost.findUnique({
+      where: { id: req.params.id },
+    })
+    if (!existing) {
+      return res.status(404).json({ error: 'Post not found' })
+    }
+
+    // Remove from BullMQ queue (no-op if already processed or not found)
+    await cancelPostJob(req.params.id)
+
+    // Mark cancelled in Prisma — keep record for audit trail
     await prisma.scheduledPost.update({
       where: { id: req.params.id },
       data: { status: 'cancelled' },
     })
+
     res.json({ success: true, data: { deleted: req.params.id } })
   } catch (err) {
     next(err)

@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
-import { ChevronLeft, ChevronRight, Plus, CalendarX2, Loader2 } from 'lucide-react'
+import { ComposeModal } from '@/components/dashboard/ComposeModal'
+import { ChevronLeft, ChevronRight, Plus, CalendarX2, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ScheduledPost } from '@publer-mcp/shared-types'
 
@@ -16,6 +17,7 @@ const PLATFORM_CHIP: Record<string, string> = {
 
 function toCalendarItems(posts: ScheduledPost[]) {
   return posts.map((p) => ({
+    id: p.id,
     day: new Date(p.scheduledAt).getDate(),
     platform: p.platforms[0] ?? 'linkedin',
     label: p.content.slice(0, 40),
@@ -23,9 +25,12 @@ function toCalendarItems(posts: ScheduledPost[]) {
 }
 
 export default function CalendarPage() {
-  const [offset, setOffset] = useState(0)
-  const [posts, setPosts] = useState<ScheduledPost[]>([])
-  const [loading, setLoading] = useState(true)
+  const [offset, setOffset]           = useState(0)
+  const [posts, setPosts]             = useState<ScheduledPost[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [defaultDate, setDefaultDate] = useState<string | undefined>()
+  const [deleting, setDeleting]       = useState<Set<string>>(new Set())
 
   const now = new Date()
   const viewDate = new Date(now.getFullYear(), now.getMonth() + offset, 1)
@@ -41,10 +46,10 @@ export default function CalendarPage() {
   const isCurrentMonth =
     viewDate.getMonth() === now.getMonth() && viewDate.getFullYear() === now.getFullYear()
 
-  useEffect(() => {
+  const fetchPosts = useCallback(() => {
     setLoading(true)
     const from = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).toISOString()
-    const to = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).toISOString()
+    const to   = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).toISOString()
     fetch(`/api/posts?from=${from}&to=${to}`)
       .then((r) => r.json())
       .then((data: { posts?: ScheduledPost[] }) => {
@@ -52,8 +57,38 @@ export default function CalendarPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+  // viewDate changes when offset changes; offset is the real dep
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset])
+
+  useEffect(() => { fetchPosts() }, [fetchPosts])
+
+  function openComposeForDay(day: number) {
+    // Build a datetime-local string at noon for the clicked day
+    const d = new Date(viewDate.getFullYear(), viewDate.getMonth(), day, 12, 0)
+    // datetime-local format: YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    setDefaultDate(local)
+    setComposeOpen(true)
+  }
+
+  function openComposeBlank() {
+    setDefaultDate(undefined)
+    setComposeOpen(true)
+  }
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (deleting.has(id)) return
+    setDeleting((prev) => new Set(prev).add(id))
+    try {
+      await fetch(`/api/posts/${id}`, { method: 'DELETE' })
+      setPosts((prev) => prev.filter((p) => p.id !== id))
+    } finally {
+      setDeleting((prev) => { const s = new Set(prev); s.delete(id); return s })
+    }
+  }
 
   const calendarItems = toCalendarItems(posts)
 
@@ -92,15 +127,13 @@ export default function CalendarPage() {
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-              <a
-                href="https://app.publer.com"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={openComposeBlank}
                 className="flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150"
               >
                 <Plus className="h-4 w-4" />
                 Schedule Post
-              </a>
+              </button>
             </div>
           </div>
 
@@ -129,6 +162,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={i}
+                    onClick={() => day && openComposeForDay(day)}
                     className={cn(
                       'min-h-[96px] border-b border-r border-edge-subtle/40 p-2',
                       'last:border-r-0 [&:nth-child(7n)]:border-r-0',
@@ -151,12 +185,26 @@ export default function CalendarPage() {
                           {dayPosts.map((post, j) => (
                             <div
                               key={j}
+                              onClick={(e) => e.stopPropagation()}
                               className={cn(
-                                'truncate rounded px-1.5 py-0.5 text-[10px] font-medium',
+                                'group relative flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
                                 PLATFORM_CHIP[post.platform] ?? 'bg-surface-overlay text-ink-secondary'
                               )}
                             >
-                              {post.label}
+                              <span className="truncate pr-3 block w-full">
+                                {deleting.has(post.id)
+                                  ? <Loader2 className="h-2.5 w-2.5 animate-spin inline" />
+                                  : post.label
+                                }
+                              </span>
+                              <button
+                                onClick={(e) => void handleDelete(post.id, e)}
+                                disabled={deleting.has(post.id)}
+                                aria-label="Delete post"
+                                className="absolute right-0.5 top-1/2 -translate-y-1/2 hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/40 text-white hover:bg-status-error transition-colors disabled:opacity-40"
+                              >
+                                <X className="h-2 w-2" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -175,20 +223,25 @@ export default function CalendarPage() {
                 <p className="text-[13px] font-medium text-ink-secondary">Nothing scheduled this month</p>
                 <p className="text-[12px] text-ink-disabled mt-0.5">Plan ahead and schedule your first post.</p>
               </div>
-              <a
-                href="https://app.publer.com"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={openComposeBlank}
                 className="mt-1 flex items-center gap-2 rounded-xl bg-coral hover:bg-coral-deep px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150"
               >
                 <Plus className="h-4 w-4" />
                 Schedule Post
-              </a>
+              </button>
             </div>
           )}
 
         </div>
       </main>
+
+      <ComposeModal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onSuccess={fetchPosts}
+        defaultDate={defaultDate}
+      />
     </div>
   )
 }

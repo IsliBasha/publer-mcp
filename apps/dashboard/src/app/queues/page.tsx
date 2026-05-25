@@ -1,7 +1,9 @@
+'use client'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/dashboard/Sidebar'
-import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Inbox } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Inbox, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getPubServices } from '@/lib/publer.server'
+import { useSocket } from '@/hooks/useSocket'
 import type { ScheduledPost } from '@publer-mcp/shared-types'
 
 type QueueStatus = 'waiting' | 'active' | 'delayed' | 'completed' | 'failed'
@@ -24,9 +26,20 @@ function formatScheduledTime(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`
 }
 
-function mapPostsToJobs(posts: ScheduledPost[]) {
+interface Job {
+  shortId: string   // display only (last 8 chars)
+  fullId: string    // full cuid for API calls
+  post: string
+  platform: string
+  time: string
+  status: QueueStatus
+  attempts: number
+}
+
+function mapPostsToJobs(posts: ScheduledPost[]): Job[] {
   return posts.map((p) => ({
-    id: p.id.slice(-8),
+    shortId: p.id.slice(-8),
+    fullId: p.id,
     post: p.content.replace(/\n/g, ' ').slice(0, 60),
     platform: p.platforms[0] ?? 'facebook',
     time: formatScheduledTime(p.scheduledAt),
@@ -37,7 +50,7 @@ function mapPostsToJobs(posts: ScheduledPost[]) {
 
 const STATUS_CONFIG = {
   completed: { icon: CheckCircle2, label: 'Published', iconClass: 'text-status-success', badge: 'bg-status-success/10 text-status-success' },
-  active: { icon: Loader2, label: 'Publishing', iconClass: 'text-coral', badge: 'bg-coral/10 text-coral' },
+  active: { icon: Loader2, label: 'Publishing', iconClass: 'text-status-warning', badge: 'bg-status-warning/10 text-status-warning' },
   delayed: { icon: AlertTriangle, label: 'Delayed', iconClass: 'text-status-warning', badge: 'bg-status-warning/10 text-status-warning' },
   failed: { icon: XCircle, label: 'Failed', iconClass: 'text-status-error', badge: 'bg-status-error/10 text-status-error' },
   waiting: { icon: Clock, label: 'Waiting', iconClass: 'text-ink-disabled', badge: 'bg-surface-overlay text-ink-secondary' },
@@ -50,10 +63,70 @@ const PLATFORM_CHIP: Record<string, string> = {
   facebook: 'bg-platform-facebook/15 text-platform-facebook',
 }
 
-export default async function QueuesPage() {
-  const { posts: postsService } = getPubServices()
-  const { posts } = await postsService.listScheduledPosts({ limit: 100 }).catch(() => ({ posts: [], total: 0 }))
-  const jobs = mapPostsToJobs(posts)
+interface PostPublishedEvent {
+  postId: string
+  platforms?: string[]
+}
+
+interface PostFailedEvent {
+  postId?: string
+  error: string
+}
+
+export default function QueuesPage() {
+  const [jobs, setJobs]         = useState<Job[]>([])
+  const [deleting, setDeleting] = useState<Set<string>>(new Set())
+  const { socket, connected }   = useSocket()
+
+  // Initial load from HTTP
+  useEffect(() => {
+    fetch('/api/posts?limit=100')
+      .then((res) => (res.ok ? res.json() : { posts: [] }))
+      .then(({ posts }: { posts: ScheduledPost[] }) => setJobs(mapPostsToJobs(posts)))
+      .catch(() => setJobs([]))
+  }, [])
+
+  async function handleDelete(fullId: string) {
+    if (deleting.has(fullId)) return
+    setDeleting((prev) => new Set(prev).add(fullId))
+    try {
+      const res = await fetch(`/api/posts/${fullId}`, { method: 'DELETE' })
+      if (res.ok) setJobs((prev) => prev.filter((j) => j.fullId !== fullId))
+    } finally {
+      setDeleting((prev) => { const s = new Set(prev); s.delete(fullId); return s })
+    }
+  }
+
+  // Real-time job status updates via WebSocket
+  useEffect(() => {
+    if (!socket) return
+
+    const onPublished = (data: PostPublishedEvent) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.fullId === data.postId ? { ...j, status: 'completed', attempts: 1 } : j
+        )
+      )
+    }
+
+    const onFailed = (data: PostFailedEvent) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          data.postId && j.fullId === data.postId
+            ? { ...j, status: 'failed', attempts: j.attempts + 1 }
+            : j
+        )
+      )
+    }
+
+    socket.on('post:published', onPublished)
+    socket.on('post:failed', onFailed)
+
+    return () => {
+      socket.off('post:published', onPublished)
+      socket.off('post:failed', onFailed)
+    }
+  }, [socket])
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
@@ -61,13 +134,26 @@ export default async function QueuesPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="px-8 py-7 max-w-[1100px] mx-auto">
 
-          <div className="mb-8">
-            <h1 className="text-[22px] font-semibold text-ink-primary font-display mb-0.5">
-              Queue Monitor
-            </h1>
-            <p className="text-[13px] text-ink-secondary">
-              Post publishing jobs · Redis-backed with retry handling
-            </p>
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h1 className="text-[22px] font-semibold text-ink-primary font-display mb-0.5">
+                Queue Monitor
+              </h1>
+              <p className="text-[13px] text-ink-secondary">
+                Post publishing jobs · Redis-backed with retry handling
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <div
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full animate-pulse',
+                  connected ? 'bg-status-success' : 'bg-ink-disabled'
+                )}
+              />
+              <span className={cn('text-[11px]', connected ? 'text-status-success' : 'text-ink-disabled')}>
+                {connected ? 'Live' : 'Connecting…'}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-5 gap-3 mb-6">
@@ -91,7 +177,7 @@ export default async function QueuesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-edge-subtle">
-                  {['Job ID', 'Post', 'Platform', 'Scheduled', 'Status', 'Retries'].map((h) => (
+                  {['Job ID', 'Post', 'Platform', 'Scheduled', 'Status', 'Retries', ''].map((h) => (
                     <th
                       key={h}
                       className="px-5 py-3.5 text-left text-[10px] font-medium tracking-[0.06em] uppercase text-ink-disabled"
@@ -104,7 +190,7 @@ export default async function QueuesPage() {
               <tbody>
                 {jobs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center">
+                    <td colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <Inbox className="h-7 w-7 text-ink-disabled" />
                         <div>
@@ -117,13 +203,15 @@ export default async function QueuesPage() {
                 ) : jobs.map((job) => {
                   const cfg = STATUS_CONFIG[job.status as keyof typeof STATUS_CONFIG]
                   const Icon = cfg.icon
+                  const canDelete = job.status === 'waiting' || job.status === 'failed'
+                  const isDeleting = deleting.has(job.fullId)
                   return (
                     <tr
-                      key={job.id}
+                      key={job.fullId}
                       className="border-b border-edge-subtle/40 last:border-0 hover:bg-surface-overlay/40 transition-colors"
                     >
                       <td className="px-5 py-3.5">
-                        <code className="font-mono text-[11px] text-ink-disabled">{job.id}</code>
+                        <code className="font-mono text-[11px] text-ink-disabled">{job.shortId}</code>
                       </td>
                       <td className="px-5 py-3.5">
                         <p className="text-[13px] text-ink-primary max-w-[200px] truncate">{job.post}</p>
@@ -147,10 +235,25 @@ export default async function QueuesPage() {
                           {job.attempts}/3
                         </span>
                       </td>
+                      <td className="px-4 py-3.5">
+                        {canDelete && (
+                          <button
+                            onClick={() => void handleDelete(job.fullId)}
+                            disabled={isDeleting}
+                            aria-label="Delete post"
+                            className="h-7 w-7 flex items-center justify-center rounded-lg text-ink-disabled hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-40"
+                          >
+                            {isDeleting
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Trash2 className="h-3.5 w-3.5" />
+                            }
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
-                </tbody>
+              </tbody>
             </table>
           </div>
 

@@ -44,6 +44,15 @@ export async function schedulePostJob(postId: string, data: PublishJobData, sche
   return job.id
 }
 
+export async function cancelPostJob(postId: string): Promise<void> {
+  const q = getQueue()
+  const job = await q.getJob(`post-${postId}`)
+  if (job) {
+    await job.remove()
+    logger.info({ postId }, 'Cancelled post job')
+  }
+}
+
 export function startWorker(io?: import('socket.io').Server) {
   const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null })
   const services = createPublerServices(env.PUBLER_API_KEY)

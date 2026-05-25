@@ -3,7 +3,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { LiveActivityFeed } from '@/components/dashboard/LiveActivityFeed'
 import { EngagementChart } from '@/components/dashboard/EngagementChart'
 import { getPubServices } from '@/lib/publer.server'
-import { Users, Eye, Heart, CalendarCheck } from 'lucide-react'
+import { Users, TrendingUp, CalendarCheck, CheckCircle2 } from 'lucide-react'
 import type { SocialAccount } from '@publer-mcp/shared-types'
 
 function getGreeting(): string {
@@ -26,15 +26,22 @@ function countConnected(accounts: SocialAccount[]): number {
 }
 
 export default async function DashboardPage() {
-  const { accounts, posts } = getPubServices()
+  const { accounts, posts, analytics } = getPubServices()
 
-  const [accountList, { posts: scheduledPosts }] = await Promise.all([
+  const [accountList, { posts: scheduledPosts }, followerMetrics] = await Promise.all([
     accounts.listAccounts().catch(() => [] as SocialAccount[]),
-    posts.listScheduledPosts({ limit: 100 }).catch(() => ({ posts: [], total: 0 })),
+    posts.listScheduledPosts({ limit: 200 }).catch(() => ({ posts: [], total: 0 })),
+    analytics.getFollowers().catch(() => []),
   ])
 
   const connectedCount = countConnected(accountList)
-  const scheduledCount = scheduledPosts.length
+  const scheduledCount = scheduledPosts.filter((p) => p.status === 'scheduled').length
+  const totalFollowers = followerMetrics.reduce((sum, m) => sum + m.followers, 0)
+  const weeklyGrowth = followerMetrics.reduce((sum, m) => sum + m.growthThisWeek, 0)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000)
+  const publishedThisWeek = scheduledPosts.filter(
+    (p) => p.status === 'published' && new Date(p.scheduledAt) >= sevenDaysAgo
+  ).length
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
@@ -56,9 +63,9 @@ export default async function DashboardPage() {
           </header>
 
           <div className="grid grid-cols-4 gap-4 mb-6">
-            <MetricCard title="Total Followers" value={48_320} change={3.2} icon={Users} />
-            <MetricCard title="Weekly Reach" value={124_800} change={8.7} icon={Eye} />
-            <MetricCard title="Engagements" value={9_420} change={12.1} icon={Heart} />
+            <MetricCard title="Total Followers" value={totalFollowers} change={weeklyGrowth > 0 ? weeklyGrowth : undefined} icon={Users} />
+            <MetricCard title="Weekly Growth" value={weeklyGrowth} icon={TrendingUp} />
+            <MetricCard title="Published This Week" value={publishedThisWeek} icon={CheckCircle2} />
             <MetricCard title="Scheduled Posts" value={scheduledCount} icon={CalendarCheck} />
           </div>
 
