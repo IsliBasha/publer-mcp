@@ -8,7 +8,11 @@ const API_SERVER_URL = process.env.API_SERVER_URL ?? 'http://localhost:3001'
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl
-    const { posts } = getPubServices()
+    const services = getPubServices()
+    if (!services) {
+      return NextResponse.json({ error: 'PUBLER_API_KEY is not configured' }, { status: 503 })
+    }
+    const { posts } = services
     const data = await posts.listScheduledPosts({
       from: searchParams.get('from') ?? undefined,
       to: searchParams.get('to') ?? undefined,

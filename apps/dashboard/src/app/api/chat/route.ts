@@ -173,7 +173,9 @@ function extractHashtags(text: string): string[] {
 }
 
 async function executeTool(name: string, input: Record<string, unknown>): Promise<unknown> {
-  const { accounts, posts, analytics } = getPubServices()
+  const services = getPubServices()
+  if (!services) throw new Error('PUBLER_API_KEY is not configured')
+  const { accounts, posts, analytics } = services
 
   switch (name) {
     case 'list_social_accounts':

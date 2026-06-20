@@ -26,7 +26,17 @@ function countConnected(accounts: SocialAccount[]): number {
 }
 
 export default async function DashboardPage() {
-  const { accounts, posts, analytics } = getPubServices()
+  const pubServices = getPubServices()
+
+  if (!pubServices) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-surface-base">
+        <p className="text-ink-secondary text-sm">PUBLER_API_KEY is not configured.</p>
+      </div>
+    )
+  }
+
+  const { accounts, posts, analytics } = pubServices
 
   const [accountList, { posts: scheduledPosts }, followerMetrics] = await Promise.all([
     accounts.listAccounts().catch(() => [] as SocialAccount[]),

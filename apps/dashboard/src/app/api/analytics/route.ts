@@ -38,7 +38,11 @@ function buildChartData(posts: ScheduledPost[]): ChartDataPoint[] {
 
 export async function GET(_req: NextRequest) {
   try {
-    const { analytics, posts } = getPubServices()
+    const services = getPubServices()
+    if (!services) {
+      return NextResponse.json({ success: false, error: 'PUBLER_API_KEY is not configured' }, { status: 503 })
+    }
+    const { analytics, posts } = services
 
     const [followerMetrics, { posts: postList }] = await Promise.all([
       analytics.getFollowers(),

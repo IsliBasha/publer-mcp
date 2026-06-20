@@ -3,7 +3,11 @@ import { getPubServices } from '@/lib/publer.server'
 
 export async function GET() {
   try {
-    const { accounts } = getPubServices()
+    const services = getPubServices()
+    if (!services) {
+      return NextResponse.json({ error: 'PUBLER_API_KEY is not configured' }, { status: 503 })
+    }
+    const { accounts } = services
     const data = await accounts.listAccounts()
     return NextResponse.json(data)
   } catch (err) {
