@@ -10,9 +10,9 @@ describe('getPubServices', () => {
     delete process.env.PUBLER_API_KEY
   })
 
-  it('throws when PUBLER_API_KEY is not set', async () => {
+  it('returns null when PUBLER_API_KEY is not set', async () => {
     const { getPubServices } = await import('./publer.server')
-    expect(() => getPubServices()).toThrow('PUBLER_API_KEY is not configured')
+    expect(getPubServices()).toBeNull()
   })
 
   it('returns services when PUBLER_API_KEY is set', async () => {
